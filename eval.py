@@ -1,4 +1,4 @@
-from home_robot.vision_pipeline import ImageProcessor
+from home_robot.vision_pipeline.voxel_map_server_dynamic_depth import ImageProcessor
 import pandas as pd
 import numpy as np
 import torch
@@ -6,6 +6,13 @@ import pickle as pkl
 import argparse
 
 import rerun as rr
+
+all_env_non_exist_total = 0
+all_env_non_exist_correct = 0
+all_env_exist_correct = 0
+all_env_exist_total = 0
+all_env_exist_mistakenly_localized = 0 
+all_env_exist_not_localized = 0
 
 def process_csv(csv_filename: str):
     '''
@@ -29,6 +36,7 @@ def read_time_steps(folder_name: str) -> list[int]:
     return time_steps
 
 def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageProcessor):
+    global all_env_non_exist_total, all_env_non_exist_correct, all_env_exist_correct, all_env_exist_total, all_env_exist_mistakenly_localized, all_env_exist_not_localized
 
     rr.init('Eval ' + folder_name + ' ' + str(time_step), spawn = True)
 
@@ -88,6 +96,14 @@ def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageP
             print(query, 'is found, which is incorrect as the object should have not been observed.')
     print('\nNon-existing objects check', non_exist_correct, '/', non_exist_total)
     print(non_exist_total - non_exist_correct, 'objects are found, which is incorrect as the object should have not been observed.', '\n')
+
+    all_env_non_exist_total += non_exist_total
+    all_env_non_exist_correct += non_exist_correct
+    all_env_exist_correct += exist_correct
+    all_env_exist_mistakenly_localized += mistakenly_localized
+    all_env_exist_not_localized += not_localized
+    all_env_exist_total += exist_total
+
     return exist_correct + non_exist_correct, exist_total + non_exist_total, score
 
 def eval_one_environment(folder_name: str, method: str):
@@ -159,15 +175,20 @@ args = parser.parse_args()
 total_score = 0
 assert len(args.folders) != 0, "No folder specified"
 
+envs_success_rate = []
 total_correct, total_queries = 0, 0
 for folder_name in args.folders:
     torch.manual_seed(args.seed)
     correct, total, score = eval_one_environment(folder_name, args.method)
     print('Environment:', folder_name, 'testing result:', correct, '/', total, '=', correct * 1.0 / total)
     print('Environment:', folder_name, 'score:', score)
+    envs_success_rate.append(correct * 1.0 / total)
     total_correct += correct
     total_queries += total
     total_score += score
 print('Total rate:', total_correct, '/', total_queries, '=', total_correct * 1.0 / total_queries)
 print('Total score:', total_score)
+
+print(envs_success_rate)
+print(all_env_non_exist_total, all_env_non_exist_correct, all_env_exist_total, all_env_exist_correct, all_env_exist_mistakenly_localized, all_env_exist_not_localized)
         
