@@ -1,4 +1,4 @@
-from home_robot.vision_pipeline.voxel_map_server_dynamic_depth import ImageProcessor
+from stretch.dynav.voxel_map_server import ImageProcessor
 import pandas as pd
 import numpy as np
 import torch
@@ -6,6 +6,8 @@ import pickle as pkl
 import argparse
 
 import rerun as rr
+
+import time
 
 all_env_non_exist_total = 0
 all_env_non_exist_correct = 0
@@ -51,7 +53,7 @@ def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageP
                                                                  colors=image_processor.voxel_map_localizer.voxel_pcd._rgb.detach().cpu() / 255., radii=0.03))
 
     for query, xyz, tol in zip(exist_queries, xyzs, tols):
-        pred_xyz, debug_text = image_processor.voxel_map_localizer.localize_A_v2(query, debug = True, return_debug = False)
+        pred_xyz, debug_text = image_processor.voxel_map_localizer.localize_A(query, debug = True, return_debug = False)
 
         if pred_xyz is not None:
             rr.log(query.replace(' ', '_') + '/predicted', rr.Points3D([pred_xyz[0], pred_xyz[1], pred_xyz[2]], colors=torch.Tensor([1, 0, 0]), radii=0.1))
@@ -78,7 +80,7 @@ def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageP
 
     non_exist_total, non_exist_correct = 0, 0
     for query in non_exist_queries:
-        pred_xyz, debug_text = image_processor.voxel_map_localizer.localize_A_v2(query, debug = True, return_debug = False)
+        pred_xyz, debug_text = image_processor.voxel_map_localizer.localize_A(query, debug = True, return_debug = False)
 
         if pred_xyz is not None:
             rr.log(query.replace(' ', '_') + '/predicted', rr.Points3D([pred_xyz[0], pred_xyz[1], pred_xyz[2]], colors=torch.Tensor([1, 0, 0]), radii=0.1))
@@ -110,10 +112,10 @@ def eval_one_environment(folder_name: str, method: str):
     first = True
     total_score = 0
     image_processor = ImageProcessor(
-            vision_method = method,
+            # vision_method = method,
             open_communication = False,
             rerun = False,
-            static = False
+            # static = False
         )
     time_steps = read_time_steps(folder_name)
     pkl_name = folder_name + '/env.pkl'
@@ -141,7 +143,11 @@ def eval_one_environment(folder_name: str, method: str):
             K = K.cpu().detach().numpy()
         if isinstance(camera_pose, torch.Tensor):
             camera_pose = camera_pose.cpu().detach().numpy()
+        import time
+        start_time = time.time()
         image_processor.process_rgbd_images(rgb, depth, K, camera_pose)
+        end_time = time.time()
+        # print('Image processing takes', end_time - start_time, 'seconds.')
         if i in time_steps:
             correct, total, score = eval_one_time_step(folder_name, i, image_processor)
             print('Environment:', folder_name, 'time step:', i, 'testing result:', correct, '/', total, '=', correct * 1.0 / total)
@@ -152,6 +158,7 @@ def eval_one_environment(folder_name: str, method: str):
                 total_score += 0.5 * score
             else:
                 total_score += score
+        # time.sleep(5)
     return total_correct, total_queries, total_score
 
 
