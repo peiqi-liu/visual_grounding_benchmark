@@ -52,8 +52,21 @@ def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageP
                     rr.log("Semantic_memory/pointcloud", rr.Points3D(image_processor.voxel_map_localizer.voxel_pcd._points.detach().cpu(), \
                                                                  colors=image_processor.voxel_map_localizer.voxel_pcd._rgb.detach().cpu() / 255., radii=0.03))
 
+    import os 
+    import cv2
+
     for query, xyz, tol in zip(exist_queries, xyzs, tols):
         pred_xyz, debug_text = image_processor.voxel_map_localizer.localize_A(query, debug = True, return_debug = False)
+
+        # obs, points, _ = image_processor.voxel_map_localizer.find_all_images(query)
+        # if not os.path.exists('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query):
+        #     os.makedirs('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query)
+        # for obs_id in obs:
+        #     obs_id = int(obs_id)
+        #     rgb = image_processor.voxel_map.observations[obs_id - 1].rgb
+        #     depth = image_processor.voxel_map.observations[obs_id - 1].depth
+        #     cv2.imwrite('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query + '/' + str(obs_id) + '.jpg', np.asarray(rgb)[:, :, [2, 1, 0]])
+        # image_processor.voxel_map_localizer.llm_locator(obs, query)
 
         if pred_xyz is not None:
             rr.log(query.replace(' ', '_') + '/predicted', rr.Points3D([pred_xyz[0], pred_xyz[1], pred_xyz[2]], colors=torch.Tensor([1, 0, 0]), radii=0.1))
@@ -82,6 +95,15 @@ def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageP
     for query in non_exist_queries:
         pred_xyz, debug_text = image_processor.voxel_map_localizer.localize_A(query, debug = True, return_debug = False)
 
+        # obs, points, _ = image_processor.voxel_map_localizer.find_all_images(query)
+        # if not os.path.exists('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query):
+        #     os.makedirs('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query)
+        # for obs_id in obs:
+        #     obs_id = int(obs_id)
+        #     rgb = image_processor.voxel_map.observations[obs_id - 1].rgb
+        #     cv2.imwrite('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query + '/' + str(obs_id) + '.jpg', np.asarray(rgb)[:, :, [2, 1, 0]])
+        # image_processor.voxel_map_localizer.llm_locator(obs, query)
+            
         if pred_xyz is not None:
             rr.log(query.replace(' ', '_') + '/predicted', rr.Points3D([pred_xyz[0], pred_xyz[1], pred_xyz[2]], colors=torch.Tensor([1, 0, 0]), radii=0.1))
         rr.log(query.replace(' ', '_'), rr.TextDocument(debug_text, media_type = rr.MediaType.MARKDOWN))
@@ -107,6 +129,7 @@ def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageP
     all_env_exist_total += exist_total
 
     return exist_correct + non_exist_correct, exist_total + non_exist_total, score
+    # return None, None, None
 
 def eval_one_environment(folder_name: str, method: str):
     first = True
