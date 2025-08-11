@@ -1,4 +1,11 @@
-from stretch.dynav.voxel_map_server import ImageProcessor
+from stretch.perception.detection.owl import OwlPerception
+from stretch.perception.encoders import MaskSiglipEncoder
+from stretch.perception.encoders.masksiglip2_encoder import MaskSiglip2Encoder
+from stretch.perception.detection.yoloe import YoloEPerception
+from stretch.perception.encoders.mobile_clip_encoder import MaskMobileClipEncoder
+from stretch.perception.encoders.clip_encoder import MaskClipEncoder
+from stretch.mapping.voxel import SparseVoxelMapDynamem as SparseVoxelMap
+
 import pandas as pd
 import numpy as np
 import torch
@@ -37,7 +44,7 @@ def read_time_steps(folder_name: str) -> list[int]:
             time_steps.append(int(line.strip()))
     return time_steps
 
-def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageProcessor):
+def eval_one_time_step(folder_name: str, time_step: int, voxel_map):
     global all_env_non_exist_total, all_env_non_exist_correct, all_env_exist_correct, all_env_exist_total, all_env_exist_mistakenly_localized, all_env_exist_not_localized
 
     rr.init('Eval ' + folder_name + ' ' + str(time_step), spawn = True)
@@ -48,32 +55,25 @@ def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageP
     exist_queries, xyzs, tols, non_exist_queries = process_csv(csv_filename)
     not_localized, mistakenly_localized, exist_total, exist_correct = 0, 0, 0, 0
 
-    if image_processor.voxel_map_localizer.voxel_pcd._points is not None:
-                    rr.log("Semantic_memory/pointcloud", rr.Points3D(image_processor.voxel_map_localizer.voxel_pcd._points.detach().cpu(), \
-                                                                 colors=image_processor.voxel_map_localizer.voxel_pcd._rgb.detach().cpu() / 255., radii=0.03))
+    # if voxel_map.semantic_memory._points is not None:
+    #         rr.log("Semantic_memory/pointcloud", rr.Points3D(voxel_map.semantic_memory._points.detach().cpu(), \
+    #                     colors=voxel_map.semantic_memory._rgb.detach().cpu() / 255., radii=0.03))
+    if voxel_map.voxel_pcd._points is not None:
+            rr.log("Semantic_memory/pointcloud", rr.Points3D(voxel_map.voxel_pcd._points.detach().cpu(), \
+                        colors=voxel_map.voxel_pcd._rgb.detach().cpu() / 255., radii=0.03))
 
     import os 
     import cv2
 
     for query, xyz, tol in zip(exist_queries, xyzs, tols):
-        pred_xyz, debug_text = image_processor.voxel_map_localizer.localize_A(query, debug = True, return_debug = False)
-
-        # obs, points, _ = image_processor.voxel_map_localizer.find_all_images(query)
-        # if not os.path.exists('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query):
-        #     os.makedirs('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query)
-        # for obs_id in obs:
-        #     obs_id = int(obs_id)
-        #     rgb = image_processor.voxel_map.observations[obs_id - 1].rgb
-        #     depth = image_processor.voxel_map.observations[obs_id - 1].depth
-        #     cv2.imwrite('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query + '/' + str(obs_id) + '.jpg', np.asarray(rgb)[:, :, [2, 1, 0]])
-        # image_processor.voxel_map_localizer.llm_locator(obs, query)
+        pred_xyz, debug_text = voxel_map.localize_text(query, debug = True, return_debug = False)
 
         if pred_xyz is not None:
             rr.log(query.replace(' ', '_') + '/predicted', rr.Points3D([pred_xyz[0], pred_xyz[1], pred_xyz[2]], colors=torch.Tensor([1, 0, 0]), radii=0.1))
         rr.log(query.replace(' ', '_') + '/labeled', rr.Points3D([xyz[0], xyz[1], xyz[2]], colors=torch.Tensor([0, 1, 0]), radii=0.1))
         rr.log(query.replace(' ', '_'), rr.TextDocument(debug_text, media_type = rr.MediaType.MARKDOWN))
-        obs_id = int(image_processor.voxel_map_localizer.find_obs_id_for_A(query).detach().cpu().item())
-        rgb = image_processor.voxel_map.observations[obs_id - 1].rgb
+        obs_id = int(voxel_map.find_obs_id_for_text(query).detach().cpu().item())
+        rgb = voxel_map.observations[obs_id - 1].rgb
         rr.log(query.replace(' ', '_') + '/Memory_image', rr.Image(rgb))
 
         exist_total += 1
@@ -93,22 +93,13 @@ def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageP
 
     non_exist_total, non_exist_correct = 0, 0
     for query in non_exist_queries:
-        pred_xyz, debug_text = image_processor.voxel_map_localizer.localize_A(query, debug = True, return_debug = False)
-
-        # obs, points, _ = image_processor.voxel_map_localizer.find_all_images(query)
-        # if not os.path.exists('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query):
-        #     os.makedirs('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query)
-        # for obs_id in obs:
-        #     obs_id = int(obs_id)
-        #     rgb = image_processor.voxel_map.observations[obs_id - 1].rgb
-        #     cv2.imwrite('test/' + folder_name[-1] + '/' + str(time_step) + '/' + query + '/' + str(obs_id) + '.jpg', np.asarray(rgb)[:, :, [2, 1, 0]])
-        # image_processor.voxel_map_localizer.llm_locator(obs, query)
+        pred_xyz, debug_text = voxel_map.localize_text(query, debug = True, return_debug = False)
             
         if pred_xyz is not None:
             rr.log(query.replace(' ', '_') + '/predicted', rr.Points3D([pred_xyz[0], pred_xyz[1], pred_xyz[2]], colors=torch.Tensor([1, 0, 0]), radii=0.1))
         rr.log(query.replace(' ', '_'), rr.TextDocument(debug_text, media_type = rr.MediaType.MARKDOWN))
-        obs_id = int(image_processor.voxel_map_localizer.find_obs_id_for_A(query).detach().cpu().item())
-        rgb = image_processor.voxel_map.observations[obs_id - 1].rgb
+        obs_id = int(voxel_map.find_obs_id_for_text(query).detach().cpu().item())
+        rgb = voxel_map.observations[obs_id - 1].rgb
         rr.log(query.replace(' ', '_') + '/Memory_image', rr.Image(rgb))
 
         non_exist_total += 1
@@ -134,12 +125,15 @@ def eval_one_time_step(folder_name: str, time_step: int, image_processor: ImageP
 def eval_one_environment(folder_name: str, method: str):
     first = True
     total_score = 0
-    image_processor = ImageProcessor(
-            # vision_method = method,
-            open_communication = False,
-            rerun = False,
-            # static = False
-        )
+    
+    # encoder = MaskSiglipEncoder(device="cuda", version="so400m")
+    # encoder = MaskSiglip2Encoder(device="cuda", version="so400m")
+    # detection_model = YoloEPerception(confidence_threshold=0.05, size="l")
+    # encoder = MaskClipEncoder(device="cuda", version="ViT-B/16")
+    encoder = MaskMobileClipEncoder(device="cuda", version="S2")
+    detection_model = OwlPerception(version="owlv2-L-p14-ensemble", device="cuda", confidence_threshold=0.1)
+    voxel_map = SparseVoxelMap(encoder = encoder, detection = detection_model, mllm=False, image_shape = (480, 360))
+
     time_steps = read_time_steps(folder_name)
     pkl_name = folder_name + '/env.pkl'
     with open(pkl_name, 'rb') as f:
@@ -168,11 +162,11 @@ def eval_one_environment(folder_name: str, method: str):
             camera_pose = camera_pose.cpu().detach().numpy()
         import time
         start_time = time.time()
-        image_processor.process_rgbd_images(rgb, depth, K, camera_pose)
+        voxel_map.process_rgbd_images(rgb, depth, K, camera_pose)
         end_time = time.time()
         # print('Image processing takes', end_time - start_time, 'seconds.')
         if i in time_steps:
-            correct, total, score = eval_one_time_step(folder_name, i, image_processor)
+            correct, total, score = eval_one_time_step(folder_name, i, voxel_map)
             print('Environment:', folder_name, 'time step:', i, 'testing result:', correct, '/', total, '=', correct * 1.0 / total)
             total_correct += correct
             total_queries += total
