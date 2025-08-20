@@ -1,10 +1,6 @@
-from stretch.perception.detection.owl import OwlPerception
-from stretch.perception.encoders import MaskSiglipEncoder
-from stretch.perception.encoders.masksiglip2_encoder import MaskSiglip2Encoder
-from stretch.perception.detection.yoloe import YoloEPerception
-from stretch.perception.encoders.mobile_clip_encoder import MaskMobileClipEncoder
-from stretch.perception.encoders.clip_encoder import MaskClipEncoder
-from stretch.mapping.voxel import SparseVoxelMapDynamem as SparseVoxelMap
+from stretch.perception.detection.lmmdet import LMMDetPerception
+from stretch.perception.encoders.siglip_encoder import MaskSiglipEncoder
+from stretch.mapping.voxel.voxel_dynamemv2 import VisualGroundingAlgorithm
 
 import pandas as pd
 import numpy as np
@@ -47,7 +43,9 @@ def read_time_steps(folder_name: str) -> list[int]:
 def eval_one_time_step(folder_name: str, time_step: int, voxel_map):
     global all_env_non_exist_total, all_env_non_exist_correct, all_env_exist_correct, all_env_exist_total, all_env_exist_mistakenly_localized, all_env_exist_not_localized
 
-    rr.init('Eval ' + folder_name + ' ' + str(time_step), spawn = True)
+    rr.init('Eval ' + folder_name + ' ' + str(time_step), spawn = False)
+
+    rr.save(folder_name + "/" + str(time_step) + ".rrd")
 
     score = 0
     # print(folder_name, time_step)
@@ -55,12 +53,9 @@ def eval_one_time_step(folder_name: str, time_step: int, voxel_map):
     exist_queries, xyzs, tols, non_exist_queries = process_csv(csv_filename)
     not_localized, mistakenly_localized, exist_total, exist_correct = 0, 0, 0, 0
 
-    # if voxel_map.semantic_memory._points is not None:
-    #         rr.log("Semantic_memory/pointcloud", rr.Points3D(voxel_map.semantic_memory._points.detach().cpu(), \
-    #                     colors=voxel_map.semantic_memory._rgb.detach().cpu() / 255., radii=0.03))
-    if voxel_map.voxel_pcd._points is not None:
-            rr.log("Semantic_memory/pointcloud", rr.Points3D(voxel_map.voxel_pcd._points.detach().cpu(), \
-                        colors=voxel_map.voxel_pcd._rgb.detach().cpu() / 255., radii=0.03))
+    if voxel_map.semantic_memory._points is not None:
+            rr.log("Semantic_memory/pointcloud", rr.Points3D(voxel_map.semantic_memory._points.detach().cpu(), \
+                        colors=voxel_map.semantic_memory._rgb.detach().cpu() / 255., radii=0.03))
 
     import os 
     import cv2
@@ -126,13 +121,9 @@ def eval_one_environment(folder_name: str, method: str):
     first = True
     total_score = 0
     
-    # encoder = MaskSiglipEncoder(device="cuda", version="so400m")
-    # encoder = MaskSiglip2Encoder(device="cuda", version="so400m")
-    # detection_model = YoloEPerception(confidence_threshold=0.05, size="l")
-    # encoder = MaskClipEncoder(device="cuda", version="ViT-B/16")
-    encoder = MaskMobileClipEncoder(device="cuda", version="S2")
-    detection_model = OwlPerception(version="owlv2-L-p14-ensemble", device="cuda", confidence_threshold=0.1)
-    voxel_map = SparseVoxelMap(encoder = encoder, detection = detection_model, mllm=False, image_shape = (480, 360))
+    encoder = MaskSiglipEncoder(device="cuda", version="so400m")
+    detection_model = LMMDetPerception(version="large", device="cuda", confidence_threshold=0.65)
+    voxel_map = VisualGroundingAlgorithm(encoder = encoder, detection = detection_model, mllm=False, image_shape = (480, 360))
 
     time_steps = read_time_steps(folder_name)
     pkl_name = folder_name + '/env.pkl'
