@@ -1,5 +1,7 @@
-from stretch.perception.detection.lmmdet import LMMDetPerception
+from stretch.perception.detection.llmdet import LLMDetPerception
+from stretch.perception.detection.owl import OwlPerception
 from stretch.perception.encoders.siglip_encoder import MaskSiglipEncoder
+from stretch.perception.encoders.tulip_encoder import MaskTulipEncoder
 from stretch.mapping.voxel.voxel_dynamemv2 import VisualGroundingAlgorithm
 
 import pandas as pd
@@ -121,8 +123,10 @@ def eval_one_environment(folder_name: str, method: str):
     first = True
     total_score = 0
     
-    encoder = MaskSiglipEncoder(device="cuda", version="so400m")
-    detection_model = LMMDetPerception(version="large", device="cuda", confidence_threshold=0.65)
+    # encoder = MaskTulipEncoder(device="cpu", version="so400m", feature_matching_threshold=0.14)
+    encoder = MaskSiglipEncoder(device="cuda", version="so400m", feature_matching_threshold=0.14, engine_path=None)
+    # detection_model = LLMDetPerception(device="cuda", version="base")
+    detection_model = OwlPerception(version="owlv2-L-p14-ensemble", device="cuda", confidence_threshold=0.2)
     voxel_map = VisualGroundingAlgorithm(encoder = encoder, detection = detection_model, mllm=False, image_shape = (480, 360))
 
     time_steps = read_time_steps(folder_name)
